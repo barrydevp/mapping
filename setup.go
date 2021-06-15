@@ -1,31 +1,44 @@
 package mapping
 
 import (
-  "time"
-  "net/url"
-  "strconv"
+	"context"
+	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
 
-  "github.com/coredns/caddy"
-  "github.com/coredns/coredns/core/dnsserver"
-  "github.com/coredns/coredns/plugin"
+	"github.com/coredns/caddy"
+	"github.com/coredns/coredns/core/dnsserver"
+	"github.com/coredns/coredns/plugin"
 
-  "github.com/go-redis/redis/v8"
+	"github.com/go-redis/redis/v8"
 )
 
 func init() { plugin.Register("mapping", setup) }
 
 func setup(c *caddy.Controller) error {
-  c.Next() // 'mapping'
-  if c.NextArg() {
-    return plugin.Error("mapping", c.ArgErr())
+  // c.Next() // 'mapping'
+  // if c.NextArg() {
+  //   return plugin.Error("mapping", c.ArgErr())
+  // }
+
+  falcon, err := parseFalcon(c)
+
+  if err != nil {
+    return plugin.Error("mapping", err)
   }
 
   dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-    return Mapping{Next: next}
+    return Mapping{Next: next, FalconInstance: falcon}
   })
 
   return nil
 }
+
+const DEFAULT_CONNECT_TIMEOUT = time.Second * 10
+const DEFAULT_READ_TIMEOUT = time.Second * 30
+const DEFAULT_TTL = 300
 
 type Falcon struct {
   Url *url.URL
@@ -34,23 +47,50 @@ type Falcon struct {
   Ttl uint32
   ConnectTimeout time.Duration
   ReadTimeout time.Duration
-  RedisClient redis.Client
+  RedisClient *redis.Client
 }
 
-func (falcon *Falcon) Connect() {
+func (falcon *Falcon) Connect() error {
   redisUrl := falcon.Url
-  
-  falcon.RedisClient = redis.NewClient(&redis.Options{
+
+  redisOptions := &redis.Options{
     Addr:     redisUrl.Host,
-    Password: redisUrl.User.Password, // no password set
-    DB:       0,  // use default DB
-  })
+    DB: 0,
+    DialTimeout: falcon.ConnectTimeout,
+    ReadTimeout: falcon.ReadTimeout,
+  }
+
+  if redisUrl.User != nil {
+    password, _ := redisUrl.User.Password()
+    redisOptions.Password = password
+  }
+  
+
+  if redisUrl.Path != "" {
+    dbString := strings.Trim(redisUrl.Path, "/") 
+
+    value, err := strconv.Atoi(dbString)
+
+    if err != nil {
+      return err
+    }
+
+    redisOptions.DB = value
+
+  }
+
+  redisClient := redis.NewClient(redisOptions)
+
+  _, err := redisClient.Ping(context.Background()).Result()
+
+  if err != nil {
+    return err
+  }
+
+  fmt.Printf("Redis %s connected!", falcon.Url)
+
+  return nil
 }
-
-
-const DEFAULT_CONNECT_TIMEOUT = time.Duration(30000)
-const DEFAULT_READ_TIMEOUT = time.Duration(30000)
-const DEFAULT_TTL = 300
 
 func parseFalcon(c *caddy.Controller) (*Falcon, error) {
   falcon := Falcon {
@@ -78,7 +118,7 @@ func parseFalcon(c *caddy.Controller) (*Falcon, error) {
 
           falcon.Url, err = url.Parse(c.Val())
 
-          if(err != nil) {
+          if err != nil {
             return nil, c.ArgErr()
           }
 
@@ -103,7 +143,7 @@ func parseFalcon(c *caddy.Controller) (*Falcon, error) {
           
           value, err := strconv.ParseInt(c.Val(), 10, 0)
 
-          if(err != nil) {
+          if err != nil {
             return nil, c.ArgErr()
           }
 
@@ -116,7 +156,7 @@ func parseFalcon(c *caddy.Controller) (*Falcon, error) {
 
           value, err := strconv.ParseInt(c.Val(), 10, 0)
 
-          if(err != nil) {
+          if err != nil {
             return nil, c.ArgErr()
           }
 
@@ -129,7 +169,7 @@ func parseFalcon(c *caddy.Controller) (*Falcon, error) {
 
           value, err := strconv.Atoi(c.Val())
 
-          if(err != nil) {
+          if err != nil {
             return nil, c.ArgErr()
           }
 
@@ -146,6 +186,12 @@ func parseFalcon(c *caddy.Controller) (*Falcon, error) {
         }
       }
     }
+  }
+
+  err = falcon.Connect()
+
+  if err != nil {
+    return nil, err
   }
 
   return &falcon, nil

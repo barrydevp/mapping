@@ -16,6 +16,7 @@ const name = "mapping"
 
 type Mapping struct {
   Next plugin.Handler
+  FalconInstance *Falcon
 }
 
 // Name implements the Handler interface.

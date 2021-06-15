@@ -11,7 +11,7 @@ import (
 )
 
 func TestWhoami(t *testing.T) {
-	wh := Router{}
+	wh := Mapping{}
 	if wh.Name() != name {
 		t.Errorf("expected plugin name: %s, got %s", wh.Name(), name)
 	}
