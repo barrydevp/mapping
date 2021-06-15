@@ -2,11 +2,10 @@ package mapping
 
 import (
   "context"
-  "net"
-  "strconv"
+  "errors"
+  "log"
   "fmt"
 
-  "github.com/coredns/coredns/request"
   "github.com/coredns/coredns/plugin"
 
   "github.com/miekg/dns"
@@ -24,44 +23,44 @@ func (m Mapping) Name() string { return name }
 
 // ServeDNS implements the plugin.Handler interface.
 func (m Mapping) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-  fmt.Println("Router has been called")
+  wr, err := m.mapDomain(w, r)
 
-  state := request.Request{W: w, Req: r}
-
-  a := new(dns.Msg)
-  a.SetReply(r)
-  a.Authoritative = true
-
-  ip := state.IP()
-  var rr dns.RR
-
-  fmt.Println("ip: ", ip)
-
-  switch state.Family() {
-  case 1:
-    rr = new(dns.A)
-    rr.(*dns.A).Hdr = dns.RR_Header{Name: state.QName(), Rrtype: dns.TypeA, Class: state.QClass()}
-    rr.(*dns.A).A = net.ParseIP(ip).To4()
-  case 2:
-    rr = new(dns.AAAA)
-    rr.(*dns.AAAA).Hdr = dns.RR_Header{Name: state.QName(), Rrtype: dns.TypeAAAA, Class: state.QClass()}
-    rr.(*dns.AAAA).AAAA = net.ParseIP(ip)
+  if err != nil {
+    // log.Printf("[mapping]: cannot map domain, %s\n", err)
   }
 
-  srv := new(dns.SRV)
-  srv.Hdr = dns.RR_Header{Name: "_" + state.Proto() + "." + state.QName(), Rrtype: dns.TypeSRV, Class: state.QClass()}
-  if state.QName() == "." {
-    srv.Hdr.Name = "_" + state.Proto() + state.QName()
+  return plugin.NextOrFailure(m.Name(), m.Next, ctx, wr, r)
+}
+
+func (m *Mapping) mapDomain(w dns.ResponseWriter, r *dns.Msg) (dns.ResponseWriter, error) {
+
+  originalQuestion := r.Question[0]
+
+  falcon := m.FalconInstance
+  redisClient := falcon.RedisClient
+
+  domainQuery := fmt.Sprintf("%s%s%s", falcon.Prefix, originalQuestion.Name, falcon.Suffix)
+
+  log.Println(domainQuery)
+
+  serviceDNS, err := redisClient.Get(context.Background(), domainQuery).Result()
+
+  if err != nil {
+    return w, err
   }
-  port, _ := strconv.Atoi(state.Port())
-  srv.Port = uint16(port)
-  srv.Target = "."
+  
+  if serviceDNS == "" {
+    return w, errors.New("domain not found")
+  }
 
-  a.Extra = []dns.RR{rr, srv}
-  a.Answer = []dns.RR{rr, srv}
+  // log.Printf("[mapping]: found %s\n", serviceDNS)
 
-  w.WriteMsg(a)
+  if serviceDNS[len(serviceDNS) - 1] != '.' {
+    serviceDNS += "."
+  }
 
-  return 0, nil
+  r.Question[0].Name = serviceDNS
+
+  return &MapperWriter{ResponseWriter: w, originalQuestion: originalQuestion, skip: false}, nil
 }
 

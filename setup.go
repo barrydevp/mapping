@@ -1,18 +1,18 @@
 package mapping
 
 import (
-	"context"
-	"fmt"
-	"net/url"
-	"strconv"
-	"strings"
-	"time"
+  "context"
+  "fmt"
+  "net/url"
+  "strconv"
+  "strings"
+  "time"
 
-	"github.com/coredns/caddy"
-	"github.com/coredns/coredns/core/dnsserver"
-	"github.com/coredns/coredns/plugin"
+  "github.com/coredns/caddy"
+  "github.com/coredns/coredns/core/dnsserver"
+  "github.com/coredns/coredns/plugin"
 
-	"github.com/go-redis/redis/v8"
+  "github.com/go-redis/redis/v8"
 )
 
 func init() { plugin.Register("mapping", setup) }
@@ -39,6 +39,8 @@ func setup(c *caddy.Controller) error {
 const DEFAULT_CONNECT_TIMEOUT = time.Second * 10
 const DEFAULT_READ_TIMEOUT = time.Second * 30
 const DEFAULT_TTL = 300
+const DEFAULT_PREFIX = "_dns_"
+const DEFAULT_POSTFIX = ""
 
 type Falcon struct {
   Url *url.URL
@@ -87,7 +89,9 @@ func (falcon *Falcon) Connect() error {
     return err
   }
 
-  fmt.Printf("Redis %s connected!", falcon.Url)
+  fmt.Printf("Redis %s connected!\n", falcon.Url)
+
+  falcon.RedisClient = redisClient
 
   return nil
 }
@@ -98,8 +102,8 @@ func parseFalcon(c *caddy.Controller) (*Falcon, error) {
       Scheme: "redis",
       Host: "localhost:6379",
     },
-    Prefix: "_dns",
-    Suffix: "",
+    Prefix: DEFAULT_PREFIX,
+    Suffix: DEFAULT_POSTFIX,
     Ttl: DEFAULT_TTL,
     ConnectTimeout: DEFAULT_CONNECT_TIMEOUT,
     ReadTimeout: DEFAULT_READ_TIMEOUT,
