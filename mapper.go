@@ -19,6 +19,9 @@ func (m *MapperWriter) WriteMsg(originalRes *dns.Msg) error {
   res := originalRes.Copy()
 
   res.Question[0] = m.originalQuestion
+  for _, rr := range res.Answer {
+    rr.Header().Name = m.originalQuestion.Name
+  }
 
   return m.ResponseWriter.WriteMsg(res)
 }

@@ -17,20 +17,23 @@ Start a server on the default port and load the *whoami* plugin.
 ~~~ corefile
 example.org {
     mapping {
-
+      uri redis://127.0.0.1:6379/1
+      prefix _dns_
+      suffix
+      connect_timeout 10000
+      read_timeout 30000
     }
 }
 ~~~
 
-When queried for "example.org A", CoreDNS will respond with:
+When queried for "dev2.merch8dns.com.bo-api.importer A", CoreDNS will respond with:
 
 ~~~ txt
 ;; QUESTION SECTION:
-;example.org.   IN       A
+;dev2.merch8dns.com.bo-api.importer. IN A
 
-;; ADDITIONAL SECTION:
-example.org.            0       IN      A       10.240.0.1
-_udp.example.org.       0       IN      SRV     0 0 40212
+;; ANSWER SECTION:
+dev2.merch8dns.com.bo-api.importer. 5 IN A      10.245.79.106
 ~~~
 
 coredns mapping plugin

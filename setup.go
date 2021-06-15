@@ -151,7 +151,7 @@ func parseFalcon(c *caddy.Controller) (*Falcon, error) {
             return nil, c.ArgErr()
           }
 
-          falcon.ConnectTimeout = time.Duration(value)
+          falcon.ConnectTimeout = time.Millisecond * time.Duration(value)
 
         case "read_timeout":
           if !c.NextArg() {
@@ -164,7 +164,7 @@ func parseFalcon(c *caddy.Controller) (*Falcon, error) {
             return nil, c.ArgErr()
           }
 
-          falcon.ReadTimeout = time.Duration(value)
+          falcon.ReadTimeout = time.Millisecond * time.Duration(value)
 
         case "ttl":
           if !c.NextArg() {

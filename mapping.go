@@ -3,10 +3,10 @@ package mapping
 import (
   "context"
   "errors"
-  "log"
   "fmt"
 
   "github.com/coredns/coredns/plugin"
+  "github.com/coredns/coredns/plugin/pkg/log"
 
   "github.com/miekg/dns"
 )
@@ -26,7 +26,7 @@ func (m Mapping) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
   wr, err := m.mapDomain(w, r)
 
   if err != nil {
-    // log.Printf("[mapping]: cannot map domain, %s\n", err)
+    log.Infof("[mapping]: cannot map domain, %s\n", err)
   }
 
   return plugin.NextOrFailure(m.Name(), m.Next, ctx, wr, r)
@@ -41,8 +41,6 @@ func (m *Mapping) mapDomain(w dns.ResponseWriter, r *dns.Msg) (dns.ResponseWrite
 
   domainQuery := fmt.Sprintf("%s%s%s", falcon.Prefix, originalQuestion.Name, falcon.Suffix)
 
-  log.Println(domainQuery)
-
   serviceDNS, err := redisClient.Get(context.Background(), domainQuery).Result()
 
   if err != nil {
@@ -53,7 +51,7 @@ func (m *Mapping) mapDomain(w dns.ResponseWriter, r *dns.Msg) (dns.ResponseWrite
     return w, errors.New("domain not found")
   }
 
-  // log.Printf("[mapping]: found %s\n", serviceDNS)
+  log.Infof("[mapping]: found %s\n", serviceDNS)
 
   if serviceDNS[len(serviceDNS) - 1] != '.' {
     serviceDNS += "."
