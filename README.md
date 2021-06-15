@@ -33,3 +33,5 @@ example.org.            0       IN      A       10.240.0.1
 _udp.example.org.       0       IN      SRV     0 0 40212
 ~~~
 
+coredns mapping plugin
+
